@@ -1,0 +1,230 @@
+---
+title: 'Mid-Term #1'
+author: "David Kane"
+date: "Solution"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(gt)
+library(tidyverse)
+
+x <- read_csv(file = "mt_1_elections-poll-ia03-3.csv",
+              col_types = cols(
+                              .default = col_character(),
+                              turnout_scale = col_double(),
+                              turnout_score = col_double(),
+                              w_LV = col_double(),
+                              w_RV = col_double(),
+                              final_weight = col_double(),
+                              timestamp = col_datetime(format = "")
+                              ))
+
+```
+
+## General Comments:
+
+1) In Question 2, some students filtered out the rows with "[DO NOT READ]," following a Piazza answer. The prompt, however, appeared to indicate that all levels of the response variable that are not Democrat or Republican should be Undecided, and all levels of the party variable that are not Democrat or Republican should be Other, including "[DO NOT READ]."  Thus, we accepted both answers.
+
+2) Question 2 needed to distinguish between the rows (response) and columns (party); this model answer shows how to do this (the [gt web page](https://github.com/rstudio/gt) is really helpful for issues like this!).  We also would accept an answer that included in the title or subtitle that the table presented response by party, but "response and party" or "response per party" is not clear enough about which is on the rows and which is on the columns.  Simply including "response" as the column name for "Democrat," "Republican," and "Undecided" is not clear enough either, as some readers may read "response" across to "Democrat," "Republican," and "Other."
+
+3) We noted in the comments to Problem Set 5 that it is important to let the reader know relevant features of your table or figure.  In Questions 2, 3, and 5, a key bit of information that needed to be included was what congressional district was presented (Iowa's 3rd Congressional District for the former two).
+
+4) We saw some interesting responses for Question 5, some of which we have shared with you!  We gave individual comments on your charts, but here are a couple of general points going forward:  Healy provides great alternatives to stacked bar charts (especially in Chapter 5), and explains why stacked bar charts are not a great way to visualize data, so we want to see you use those alternatives from now on.  Also, we would no longer like to see scatterplots where both variables are categorical; these are pretty hard to read.  (We didn't take points off if you used one of these types of charts on this midterm, but please keep this in mind for the future.)
+
+## Question 1:
+
+There were `r x %>% count(response) %>% filter(response == "Rep") %>% pull(n)` respondents who supported the Republican candidate.  
+
+There were `r x %>% count(response) %>% spread(response, n) %>% mutate(diff = Dem - Rep) %>% pull(diff)` more respondents who supported the Democratic candidate than supported the Republican candidate.
+
+Rounded to the nearest integer, `r x %>% mutate(total = n()) %>% count(response, total) %>% spread(response, n) %>% mutate(answer = round(100 * (Dem + Rep) / total)) %>% pull(answer)`% of those surveyed supported either the Democratic or the Republican candidate.
+
+There are two gender variables (`gender` and `gender_combined`). There are `r x %>% filter(gender == gender_combined) %>% nrow()` individuals for whom these variables have the same values. 
+
+
+## Question 2:
+
+```{r q2, results='asis'}
+x %>% 
+  select(response, partyid) %>% 
+  
+  # There is probably a more elegant way to handle this.
+  
+  mutate(partyid = fct_recode(partyid, Other = c("[DO NOT READ] Refused"))) %>% 
+  mutate(partyid = fct_recode(partyid, Other = c("Independent (No party)"))) %>% 
+  mutate(partyid = fct_recode(partyid, Other = c("or as a member of another political party"))) %>% 
+  
+  # There are a lot of fct_* functions and it is worth knowing about them.
+  
+  mutate(response = fct_lump(response, 2, other_level = "Und")) %>% 
+  mutate(response = fct_recode(response, Democrat = "Dem",
+                                         Republican = "Rep",
+                                         Undecided = "Und")) %>% 
+  
+  count(response, partyid) %>% 
+  
+  spread(key = partyid, value = n) %>% 
+  select(response, Democrat, Republican, Other) %>% 
+  gt() %>% 
+  
+  cols_label(response = "Voter Preference") %>% 
+  tab_spanner("Voter Identification", columns = vars(Democrat, Republican, Other)) %>% 
+  
+  
+  tab_header(title = "Survey Results in Iowa 3rd Congressional District",
+             subtitle = "Raw number of responses (unweighted) in each category") %>% 
+  tab_stubhead_label("Voter Preference") %>% 
+  tab_source_note(md("Source: *New York Times*/Sienna College Polling from October 2018")) %>% 
+
+  as_raw_html() %>% as.character() %>% cat()
+```
+
+
+
+
+## Question 3:
+
+```{r q3, results='asis'}
+x %>% 
+  
+  # select'ing and filter'ing at the start of a pipe is a great way to see what
+  # is going on.
+  
+  select(response, likely, ager) %>% 
+  filter(ager != "[DO NOT READ] Refused") %>% 
+  filter(response %in% c("Dem", "Rep")) %>% 
+  filter(likely != "[DO NOT READ] Don't know/Refused") %>% 
+  
+  # We might have tried to use regular expressions to pull out the first and
+  # second number in each range, and then average them. That would have been the
+  # right approach if there were a dozen or more categories. But, with just 4, I
+  # took the easy way out.
+  
+  mutate(age = case_when(ager == "18 to 34" ~ 26,
+                         ager == "35 to 49" ~ 42,
+                         ager == "50 to 64" ~ 57,
+                         ager == "65 and older" ~ 75)) %>% 
+  
+  # likely is a character variable. We need to turn it into a factor so that the
+  # levels print out in a pleasing order.
+  
+  mutate(likely = factor(likely, levels = c("Already voted", "Almost certain", "Very likely",
+                                            "Somewhat likely", "Not very likely", "Not at all likely"))) %>% 
+  
+  group_by(response, likely) %>% 
+  summarize(avg_age = mean(age)) %>% 
+  ungroup() %>% 
+  spread(response, avg_age) %>% 
+  gt() %>% 
+  
+  tab_header(title = "Survey Results in Iowa 3rd Congressional District",
+             subtitle = "Average age of responders (unweighted) in each category") %>% 
+  
+  tab_spanner("Voter Preferences", columns = vars(Dem, Rep)) %>% 
+
+  
+  cols_label(Dem = "Democrat",
+             Rep = "Republican",
+             likely = "Voting Likelihood") %>% 
+  
+  fmt_number(columns = vars(Dem, Rep), decimals = 1) %>% 
+  
+  fmt_missing(columns = vars(Dem), rows = 5) %>% 
+  fmt_missing(columns = vars(Rep), rows = 6) %>% 
+  
+  tab_stubhead_label("Voting Likelihood") %>% 
+  tab_source_note(md("Source: *New York Times*/Sienna College Polling from October 2018")) %>% 
+
+  
+  as_raw_html() %>% as.character() %>% cat()
+```
+
+
+## Question 4: 
+
+```{r q4, results='asis'}
+# Always name your code chunks. You need to set results to "asis" to get your
+# table to appear.
+
+x %>% 
+  
+  select(response, race_edu, final_weight) %>% 
+  
+  # There is no row for these observations in the chart, so they must be
+  # deleted.
+  
+  filter(race_edu != "[DO NOT READ] Don't know/Refused") %>% 
+  
+  mutate(
+    race_edu = case_when(race_edu == "White, 4-Year College Grads" ~ 
+                           "White, college grad",
+                        race_edu == "White, No 4-Year College Degree" ~ 
+                          "White, not college grad",
+                        TRUE ~ race_edu)) %>%  
+  
+  # Most difficult code. But this sequence --- group_by(), summarize() and
+  # spread() --- is something that we will see over and over again. spread() and
+  # gather() are, conceptually, two of the trickiest functions we learn. I have
+  # to look up the help almost every time.
+  
+  # If we left total as n(), we would have calculated the unweighted
+  # percentages. (Recall the monologue about poll weighting.)
+    
+  group_by(race_edu, response) %>% 
+  summarize(total = sum(final_weight)) %>% 
+  spread(key = response, value = total, fill = 0) %>% 
+  ungroup() %>% 
+  
+  # Now some simple calculations.
+  
+  mutate(all_voters = Dem + Rep + Und + `3` + `4` + `5` + `6`) %>% 
+  mutate(Dem = Dem / all_voters,
+         Rep = Rep / all_voters,
+         Und = Und / all_voters) %>%  
+  select(-all_voters, -`3`, -`4`, -`5`, -`6`) %>%  
+  
+  # At this stage, we have a tibble in the shape of the final table. We don't
+  # need nearly as much other stuff as we usually do.
+  
+  gt() %>% 
+  
+  tab_source_note(
+    source_note = "Percentages are weighted to resemble likely voters; the number of respondents in each subgroup is unweighted. Undecided voters includes those who refused to answer."
+  ) %>% 
+  
+  # Ms. Aggarwal had an elegant approach in Problem Set 4 to shade in the cells, 
+  # which we borrow here
+
+  tab_style(style = cells_styles(
+    bkgd_color = "crimson", 
+    text_color = "white"),
+    locations = cells_data(columns = vars(Rep), rows = Rep > Dem)) %>%
+  
+  tab_style(style = cells_styles(
+    bkgd_color = "blue", 
+    text_color = "white"), 
+    locations = cells_data(columns = vars(Dem), rows = Dem > Rep)) %>%
+  
+  cols_label(
+    race_edu = "Race and education",
+    Dem = "DEM.",
+    Rep = "REP.",
+    Und = "UND."
+  ) %>%
+  
+  fmt_percent(columns = vars(Dem, Rep, Und),
+              decimals = 0) %>% 
+
+  
+  as_raw_html() %>% as.character() %>% cat() 
+
+
+```
+
+
+
+## Question 5: 
+
+

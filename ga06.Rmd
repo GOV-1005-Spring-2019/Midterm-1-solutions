@@ -1,0 +1,63 @@
+---
+title: "mt_1"
+author: "Student"
+date: "3/7/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# Setup and installing libraries
+# Library needed for basic functions
+library(tidyverse)
+# Library for reading .csv files
+library(readr)
+# Library for creating tables
+library(gt)
+# Library for creating graphs
+library(ggplot2)
+# Library for creating animated graphs
+library(gganimate)
+```
+
+
+##Question 5
+```{r importq5, message=FALSE, echo=FALSE}
+# I'm a Georgia native, so I wanted to look at the election data from Georgia's 6th Congressional district. 
+# Read the .csv Georgia 6th Congressional District election data into y
+y <- read_csv("elections-poll-ga06-3.csv") %>% 
+  # For my graphic, I wanted to see how many respondents approved or disapproved of the job Donald Trump is doing as president. 
+  # Knowing that Atlanta is a diverse city with pockets of diversity in different counties, I wanted to look at the differences in president approval ratings in each county. 
+  # I thought that utilizing gganimate would be a good way to show these distinctions between each county, which is why I utilize gganimate later in this problem. 
+  # the "approve" variable, according to the NYTimes Live Polls info, contains answers to the question: "Do you approve or disapprove of the job Donald Trump is doing as president?"
+  # Because I wanted to see the varying rates of approval by region and race, I selected for those variables. 
+  select(file_race_black, approve, region) %>% 
+  # Filter out race that is Unknown -- I wanted to focus on values where the race was known
+  filter(file_race_black != "Unknown") %>% 
+  # fct_relevel to reorder the file_race_black variable's levels and put "Black" and "Other Non-White" next to each other
+  mutate(file_race_black = fct_relevel(file_race_black, c("White", "Black", "Other Non-White")),
+         approve = fct_recode(approve, Disapprove = "Disapp."))
+```
+
+```{r q5, message=FALSE, echo=FALSE} 
+# Creates a plot using the y dataset that we created above, with the x axis being the approval status, and the color of the bars being the approval status as well. 
+ggplot(y, aes(x=approve, fill=approve))+
+  # I used geom_bar (a bar graph) to compare the approval numbers, setting a custom width of 1 for the bars, so that the bars would touch each other. 
+  geom_bar(width = 1) +
+  # I manually filled the bars with colors (forest green for those who approved of Trump's job as president, deep red for those who disapproved of Trump's job as president, and gray for those who don't know). 
+  # Some might wonder why the colors are not red for approve and blue for disapprove (originally, I had the colors like this). The reason I did not do this was becuase I did not want viewers of the graph to confuse approval with party affiliation/response. You can intend to vote for the Democratic candidate in the Congressional election, even if you approve of Trump's presidency. You can vote for the Republican candidate, even if you disapprove of Trump's presidency. Because Approval of the presidency and what party respondents intend on voting for in the congressional district are two different variables/things, I did not want to imply approval rates ran along party lines in my chart. 
+  # I used hex color codes to get specific colors for approve and disapprove, because I didn't like the standard "green" and "red" colors that were provided. I set name to "Approval Status" to rename the legend's title. 
+  scale_fill_manual(values=c("#228B22", "#d83333", "gray"), name = "Approval Status") +
+  # I used facet_wrap to split the chart by race, creating three smaller sub-charts within the graphic. 
+  facet_wrap(~file_race_black) + 
+  # transition_manual is from gganimate, animating the graphic. transition_manual allows you to map a certain variable in the data to the animation frames. I used "region" as an argument so that the graphic animation transitions between different counties of Georgia. 
+  transition_manual(region) +
+  # This was a design change, but I personally liked the legend better than the x axis labels. I thought that with the x axis labels and names, the graph was too cluttered and redundant (because facet_wrap makes there be three times as many labels on the x axis since there are three different levels in file_race_black). As a result, I used theme() to get rid of the x-axis text.
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  # I used labs to add a title that's appropriate for the graphic, add a better y axis label, and add a caption to indicate where the data is coming from.
+  # in "title = ", I used "{current_frame}" because that allows for dynamic changing of the title. {current_frame} gives you the name of the current frame, which would be the GA county's data the graph is currently displaying. 
+  labs(title = "President Donald Trump Approval Numbers in GA County: {current_frame}",
+       y = "Number of Respondents",
+       caption = "Source: New York Times Upshot/Siena College 2018 live polls")
+```
